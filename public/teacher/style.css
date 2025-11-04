@@ -1,0 +1,48 @@
+body {
+  font-family: 'Poppins', sans-serif;
+  background: linear-gradient(135deg, #74ebd5, #acb6e5);
+  margin: 0;
+  padding: 0;
+}
+.container {
+  width: 90%;
+  margin: auto;
+  text-align: center;
+  padding: 20px;
+}
+.video-container {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+video {
+  width: 45%;
+  border-radius: 10px;
+  border: 2px solid #fff;
+}
+.question-box {
+  margin-top: 20px;
+}
+textarea {
+  width: 80%;
+  height: 80px;
+  border-radius: 5px;
+  padding: 8px;
+}
+input, button {
+  padding: 10px;
+  margin: 5px;
+  border-radius: 5px;
+  border: none;
+}
+button {
+  background: #007bff;
+  color: white;
+  cursor: pointer;
+}
+#answersBox {
+  margin-top: 20px;
+  background: #fff;
+  border-radius: 10px;
+  padding: 15px;
+}

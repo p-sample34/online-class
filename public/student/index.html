@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SSVT Student Panel</title>
+<link rel="stylesheet" href="style.css" />
+<script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+<div class="container">
+  <h1>👨‍🎓 SSVT Student Panel</h1>
+  <div class="video-container">
+    <video id="teacherVideo" autoplay playsinline></video>
+  </div>
+
+  <div id="questionBox" class="question-box">
+    <h3>Waiting for teacher's question...</h3>
+  </div>
+
+  <textarea id="answerInput" placeholder="Write your answer here..."></textarea><br>
+  <button id="submitAnswer">Submit Answer</button>
+  <h4 id="timerDisplay"></h4>
+</div>
+
+<script>
+const socket = io();
+const name = localStorage.getItem("studentName") || "Anonymous";
+
+let peerConnection;
+const teacherVideo = document.getElementById('teacherVideo');
+const servers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+
+socket.on("webrtc-offer", async (offer) => {
+  peerConnection = new RTCPeerConnection(servers);
+  peerConnection.ontrack = e => teacherVideo.srcObject = e.streams[0];
+  peerConnection.onicecandidate = e => {
+    if (e.candidate) socket.emit("webrtc-candidate", e.candidate);
+  };
+
+  const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+  screenStream.getTracks().forEach(track => peerConnection.addTrack(track, screenStream));
+
+  await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+  const answer = await peerConnection.createAnswer();
+  await peerConnection.setLocalDescription(answer);
+  socket.emit("webrtc-answer", answer);
+});
+
+socket.on("webrtc-candidate", async (candidate) => {
+  try { await peerConnection.addIceCandidate(candidate); } catch(e){}
+});
+
+// --- Receive question from teacher ---
+socket.on("new-question", (data) => {
+  document.getElementById("questionBox").innerHTML = `<h3>${data.question}</h3>`;
+  startTimer(data.timeLimit);
+});
+
+function startTimer(seconds) {
+  const display = document.getElementById("timerDisplay");
+  let time = seconds;
+  display.textContent = `Time Left: ${time}s`;
+  const interval = setInterval(() => {
+    time--;
+    display.textContent = `Time Left: ${time}s`;
+    if (time <= 0) {
+      clearInterval(interval);
+      submitAnswer();
+    }
+  }, 1000);
+}
+
+// --- Submit answer ---
+document.getElementById("submitAnswer").onclick = submitAnswer;
+
+async function submitAnswer() {
+  const answer = document.getElementById("answerInput").value.trim();
+  if (!answer) return alert("Please write your answer!");
+  socket.emit("student-answer", { studentName: name, answer });
+  await fetch("/student/submit-answer", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ studentName: name, answer })
+  });
+  document.getElementById("answerInput").value = "";
+  document.getElementById("questionBox").innerHTML = "<h3>Answer submitted. Waiting for next question...</h3>";
+}
+</script>
+</body>
+</html>

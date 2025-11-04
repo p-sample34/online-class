@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SSVT Teacher Panel</title>
+<link rel="stylesheet" href="style.css" />
+<script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>👨‍🏫 SSVT Teacher Panel</h1>
+
+    <div class="video-container">
+      <video id="teacherVideo" autoplay muted playsinline></video>
+      <video id="studentVideo" autoplay playsinline></video>
+    </div>
+
+    <div class="question-box">
+      <h3>Send Question to Students</h3>
+      <textarea id="questionInput" placeholder="Type question..."></textarea>
+      <input type="number" id="timeLimit" placeholder="Time in seconds" />
+      <button id="sendBtn">Send Question</button>
+    </div>
+
+    <div id="answersBox">
+      <h3>Student Answers</h3>
+      <ul id="answersList"></ul>
+    </div>
+
+    <button id="generateReport">📄 Generate PDF Report</button>
+  </div>
+
+<script>
+const socket = io();
+
+// --- WebRTC setup ---
+const teacherVideo = document.getElementById('teacherVideo');
+const studentVideo = document.getElementById('studentVideo');
+let peerConnection;
+const servers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+
+async function startVideo() {
+  const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  teacherVideo.srcObject = stream;
+
+  peerConnection = new RTCPeerConnection(servers);
+  stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+
+  peerConnection.ontrack = event => studentVideo.srcObject = event.streams[0];
+  peerConnection.onicecandidate = e => {
+    if (e.candidate) socket.emit("webrtc-candidate", e.candidate);
+  };
+
+  const offer = await peerConnection.createOffer();
+  await peerConnection.setLocalDescription(offer);
+  socket.emit("webrtc-offer", offer);
+}
+startVideo();
+
+socket.on("webrtc-answer", async (answer) => {
+  const remoteDesc = new RTCSessionDescription(answer);
+  await peerConnection.setRemoteDescription(remoteDesc);
+});
+socket.on("webrtc-candidate", async (candidate) => {
+  try { await peerConnection.addIceCandidate(candidate); } catch(e){}
+});
+
+// --- Question sending ---
+document.getElementById("sendBtn").onclick = async () => {
+  const question = document.getElementById("questionInput").value.trim();
+  const timeLimit = Number(document.getElementById("timeLimit").value);
+  if (!question) return alert("Enter a question!");
+  socket.emit("teacher-question", { question, timeLimit });
+  document.getElementById("questionInput").value = "";
+  document.getElementById("timeLimit").value = "";
+};
+
+// --- Receive answers ---
+socket.on("student-answer", (data) => {
+  const li = document.createElement("li");
+  li.textContent = `${data.studentName}: ${data.answer}`;
+  document.getElementById("answersList").appendChild(li);
+});
+
+// --- Generate PDF report ---
+document.getElementById("generateReport").onclick = () => {
+  window.location.href = "/teacher/generate-report";
+};
+</script>
+</body>
+</html>
