@@ -31,7 +31,7 @@ form.addEventListener("submit", async (e) => {
   const password = document.getElementById("password").value.trim();
 
   if (role === "teacher") {
-    const res = await fetch("/auth/teacher", {
+    const res = await fetch("https://online-class-m8h6.onrender.com/auth/teacher", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({ name, password })
@@ -40,7 +40,7 @@ form.addEventListener("submit", async (e) => {
     if (data.success) window.location.href = "/teacher/index.html";
     else alert("Invalid teacher password");
   } else {
-    await fetch("/auth/student", {
+    await fetch("https://online-class-m8h6.onrender.com/auth/student", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({ name })
@@ -52,3 +52,4 @@ form.addEventListener("submit", async (e) => {
 </script>
 </body>
 </html>
+
