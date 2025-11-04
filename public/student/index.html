@@ -1,91 +1,71 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>SSVT Student Panel</title>
-<link rel="stylesheet" href="style.css" />
-<script src="/socket.io/socket.io.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Panel | Online Test</title>
+  <link rel="stylesheet" href="../style.css">
 </head>
 <body>
-<div class="container">
-  <h1>👨‍🎓 SSVT Student Panel</h1>
-  <div class="video-container">
-    <video id="teacherVideo" autoplay playsinline></video>
+  <div class="container">
+    <h1>👨‍🎓 Welcome, <span id="studentName"></span></h1>
+
+    <div id="questionContainer">
+      <h2 id="questionBox">Waiting for teacher to send a question...</h2>
+      <p id="timer"></p>
+    </div>
+
+    <div id="answerBox" style="display:none;">
+      <textarea id="answer" placeholder="Write your answer here..."></textarea>
+      <button onclick="submitAnswer()">Submit Answer</button>
+    </div>
   </div>
 
-  <div id="questionBox" class="question-box">
-    <h3>Waiting for teacher's question...</h3>
-  </div>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script>
+    const API_URL = "https://online-class-m8h6.onrender.com";
+    const socket = io(API_URL);
 
-  <textarea id="answerInput" placeholder="Write your answer here..."></textarea><br>
-  <button id="submitAnswer">Submit Answer</button>
-  <h4 id="timerDisplay"></h4>
-</div>
+    const studentName = localStorage.getItem("studentName");
+    document.getElementById("studentName").innerText = studentName || "Student";
 
-<script>
-const socket = io();
-const name = localStorage.getItem("studentName") || "Anonymous";
+    socket.on("newQuestion", (data) => {
+      const { question, timeLimit } = data;
+      document.getElementById("questionBox").innerText = question;
+      document.getElementById("answerBox").style.display = "block";
 
-let peerConnection;
-const teacherVideo = document.getElementById('teacherVideo');
-const servers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+      let timeLeft = parseInt(timeLimit);
+      const timer = setInterval(() => {
+        document.getElementById("timer").innerText = `⏱️ Time left: ${timeLeft}s`;
+        timeLeft--;
+        if (timeLeft < 0) {
+          clearInterval(timer);
+          submitAnswer();
+        }
+      }, 1000);
+    });
 
-socket.on("webrtc-offer", async (offer) => {
-  peerConnection = new RTCPeerConnection(servers);
-  peerConnection.ontrack = e => teacherVideo.srcObject = e.streams[0];
-  peerConnection.onicecandidate = e => {
-    if (e.candidate) socket.emit("webrtc-candidate", e.candidate);
-  };
+    async function submitAnswer() {
+      const answer = document.getElementById("answer").value.trim();
+      if (!answer) return alert("Please write your answer before submitting.");
 
-  const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-  screenStream.getTracks().forEach(track => peerConnection.addTrack(track, screenStream));
+      const res = await fetch(`${API_URL}/student/answer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentName, answer }),
+      });
 
-  await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-  const answer = await peerConnection.createAnswer();
-  await peerConnection.setLocalDescription(answer);
-  socket.emit("webrtc-answer", answer);
-});
-
-socket.on("webrtc-candidate", async (candidate) => {
-  try { await peerConnection.addIceCandidate(candidate); } catch(e){}
-});
-
-// --- Receive question from teacher ---
-socket.on("new-question", (data) => {
-  document.getElementById("questionBox").innerHTML = `<h3>${data.question}</h3>`;
-  startTimer(data.timeLimit);
-});
-
-function startTimer(seconds) {
-  const display = document.getElementById("timerDisplay");
-  let time = seconds;
-  display.textContent = `Time Left: ${time}s`;
-  const interval = setInterval(() => {
-    time--;
-    display.textContent = `Time Left: ${time}s`;
-    if (time <= 0) {
-      clearInterval(interval);
-      submitAnswer();
+      const data = await res.json();
+      if (data.success) {
+        socket.emit("answerSubmitted", { studentName, answer });
+        alert("Answer submitted!");
+        document.getElementById("answer").value = "";
+        document.getElementById("answerBox").style.display = "none";
+        document.getElementById("timer").innerText = "";
+      } else {
+        alert("Error submitting answer.");
+      }
     }
-  }, 1000);
-}
-
-// --- Submit answer ---
-document.getElementById("submitAnswer").onclick = submitAnswer;
-
-async function submitAnswer() {
-  const answer = document.getElementById("answerInput").value.trim();
-  if (!answer) return alert("Please write your answer!");
-  socket.emit("student-answer", { studentName: name, answer });
-  await fetch("/student/submit-answer", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ studentName: name, answer })
-  });
-  document.getElementById("answerInput").value = "";
-  document.getElementById("questionBox").innerHTML = "<h3>Answer submitted. Waiting for next question...</h3>";
-}
-</script>
+  </script>
 </body>
 </html>
