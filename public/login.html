@@ -1,55 +1,49 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>SSVT Online Test Login</title>
-<style>
-body { font-family: Poppins, sans-serif; background: linear-gradient(135deg, #00c6ff, #0072ff); display:flex; justify-content:center; align-items:center; height:100vh; }
-form { background:#fff; padding:30px; border-radius:10px; box-shadow:0 0 15px rgba(0,0,0,0.2); text-align:center; width:300px; }
-input, button { width:100%; padding:10px; margin:8px 0; border:none; border-radius:5px; }
-button { background:#0072ff; color:white; cursor:pointer; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Online Test Login</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<form id="loginForm">
-  <h2>SSVT Login</h2>
-  <select id="role">
-    <option value="student">Student</option>
-    <option value="teacher">Teacher</option>
-  </select>
-  <input type="text" id="name" placeholder="Enter your name" required>
-  <input type="password" id="password" placeholder="Password (for teacher only)">
-  <button type="submit">Login</button>
-</form>
+  <div class="login-container">
+    <h1>🔐 Online Test Login</h1>
+    <input type="text" id="name" placeholder="Enter your name" />
+    <input type="password" id="password" placeholder="Teacher password (optional)" />
+    <button id="loginBtn">Login</button>
+  </div>
 
-<script>
-const form = document.getElementById("loginForm");
-form.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const role = document.getElementById("role").value;
-  const name = document.getElementById("name").value.trim();
-  const password = document.getElementById("password").value.trim();
+  <script>
+    const API_URL = "https://online-class-m8h6.onrender.com";
 
-  if (role === "teacher") {
-    const res = await fetch("https://online-class-m8h6.onrender.com/auth/teacher", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ name, password })
+    document.getElementById("loginBtn").addEventListener("click", async () => {
+      const name = document.getElementById("name").value.trim();
+      const password = document.getElementById("password").value.trim();
+
+      if (!name) return alert("Please enter your name");
+
+      // If password matches teacher's code, go to teacher panel
+      if (password === "ssvt-tutor-2018") {
+        localStorage.setItem("teacherName", name);
+        location.href = "teacher/index.html";
+      } else {
+        // Otherwise log in as student
+        const res = await fetch(`${API_URL}/auth/student`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name }),
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          localStorage.setItem("studentName", name);
+          location.href = "student/index.html";
+        } else {
+          alert(data.message || "Login failed");
+        }
+      }
     });
-    const data = await res.json();
-    if (data.success) window.location.href = "/teacher/index.html";
-    else alert("Invalid teacher password");
-  } else {
-    await fetch("https://online-class-m8h6.onrender.com/auth/student", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ name })
-    });
-    localStorage.setItem("studentName", name);
-    window.location.href = "/student/index.html";
-  }
-});
-</script>
+  </script>
 </body>
 </html>
-
