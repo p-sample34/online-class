@@ -1,92 +1,93 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>SSVT Teacher Panel</title>
-<link rel="stylesheet" href="style.css" />
-<script src="/socket.io/socket.io.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teacher Panel | Online Test</title>
+  <link rel="stylesheet" href="../style.css">
 </head>
 <body>
   <div class="container">
-    <h1>👨‍🏫 SSVT Teacher Panel</h1>
+    <h1>👩‍🏫 Welcome, <span id="teacherName"></span></h1>
 
-    <div class="video-container">
-      <video id="teacherVideo" autoplay muted playsinline></video>
-      <video id="studentVideo" autoplay playsinline></video>
-    </div>
+    <h2>Ask a Question</h2>
+    <textarea id="question" placeholder="Enter your question here..."></textarea>
+    <input type="number" id="time" placeholder="Time limit (in seconds)" />
+    <button onclick="sendQuestion()">Send Question</button>
 
-    <div class="question-box">
-      <h3>Send Question to Students</h3>
-      <textarea id="questionInput" placeholder="Type question..."></textarea>
-      <input type="number" id="timeLimit" placeholder="Time in seconds" />
-      <button id="sendBtn">Send Question</button>
-    </div>
+    <h2>Answers</h2>
+    <div id="answers"></div>
 
-    <div id="answersBox">
-      <h3>Student Answers</h3>
-      <ul id="answersList"></ul>
-    </div>
-
-    <button id="generateReport">📄 Generate PDF Report</button>
+    <br><br>
+    <button onclick="endTest()">📄 End Test & Download PDF</button>
   </div>
 
-<script>
-const socket = io();
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script>
+    const API_URL = "https://online-class-m8h6.onrender.com";
+    const socket = io(API_URL);
 
-// --- WebRTC setup ---
-const teacherVideo = document.getElementById('teacherVideo');
-const studentVideo = document.getElementById('studentVideo');
-let peerConnection;
-const servers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+    const teacherName = localStorage.getItem("teacherName");
+    document.getElementById("teacherName").innerText = teacherName || "Teacher";
 
-async function startVideo() {
-  const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-  teacherVideo.srcObject = stream;
+    async function sendQuestion() {
+      const question = document.getElementById("question").value.trim();
+      const timeLimit = document.getElementById("time").value;
 
-  peerConnection = new RTCPeerConnection(servers);
-  stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+      if (!question || !timeLimit) return alert("Please enter a question and time limit.");
 
-  peerConnection.ontrack = event => studentVideo.srcObject = event.streams[0];
-  peerConnection.onicecandidate = e => {
-    if (e.candidate) socket.emit("webrtc-candidate", e.candidate);
-  };
+      const res = await fetch(`${API_URL}/teacher/question`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, timeLimit }),
+      });
 
-  const offer = await peerConnection.createOffer();
-  await peerConnection.setLocalDescription(offer);
-  socket.emit("webrtc-offer", offer);
-}
-startVideo();
+      const data = await res.json();
+      if (data.success) {
+        socket.emit("newQuestion", { question, timeLimit });
+        alert("Question sent to students!");
+        document.getElementById("question").value = "";
+        document.getElementById("time").value = "";
+      } else {
+        alert("Error sending question.");
+      }
+    }
 
-socket.on("webrtc-answer", async (answer) => {
-  const remoteDesc = new RTCSessionDescription(answer);
-  await peerConnection.setRemoteDescription(remoteDesc);
-});
-socket.on("webrtc-candidate", async (candidate) => {
-  try { await peerConnection.addIceCandidate(candidate); } catch(e){}
-});
+    socket.on("answerSubmitted", (data) => {
+      const answersDiv = document.getElementById("answers");
+      const el = document.createElement("div");
+      el.innerHTML = `
+        <p><b>${data.studentName}</b>: ${data.answer}</p>
+        <input type="number" id="marks-${data.studentName}" placeholder="Marks" />
+        <button onclick="submitMarks('${data.studentName}')">Submit Marks</button>
+        <hr>
+      `;
+      answersDiv.appendChild(el);
+    });
 
-// --- Question sending ---
-document.getElementById("sendBtn").onclick = async () => {
-  const question = document.getElementById("questionInput").value.trim();
-  const timeLimit = Number(document.getElementById("timeLimit").value);
-  if (!question) return alert("Enter a question!");
-  socket.emit("teacher-question", { question, timeLimit });
-  document.getElementById("questionInput").value = "";
-  document.getElementById("timeLimit").value = "";
-};
+    async function submitMarks(studentName) {
+      const marks = document.getElementById(`marks-${studentName}`).value;
+      if (!marks) return alert("Please enter marks.");
 
-// --- Receive answers ---
-socket.on("student-answer", (data) => {
-  const li = document.createElement("li");
-  li.textContent = `${data.studentName}: ${data.answer}`;
-  document.getElementById("answersList").appendChild(li);
-});
+      const res = await fetch(`${API_URL}/teacher/marks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentName, marks }),
+      });
 
-// --- Generate PDF report ---
-document.getElementById("generateReport").onclick = () => {
-  window.location.href = "/teacher/generate-report";
-};
-</script>
+      const data = await res.json();
+      if (data.success) alert("Marks submitted!");
+    }
+
+    async function endTest() {
+      const res = await fetch(`${API_URL}/teacher/endtest`);
+      const blob = await res.blob();
+
+      const link = document.createElement("a");
+      link.href = window.URL.createObjectURL(blob);
+      link.download = "test-report.pdf";
+      link.click();
+    }
+  </script>
 </body>
 </html>
