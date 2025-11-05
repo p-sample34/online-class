@@ -1,12 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Teacher Panel | Online Test</title>
-  <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="style.css" />
   <style>
     /* small inline styles so it looks okay if you didn't change style.css */
@@ -19,11 +16,8 @@
 </head>
 <body>
   <div class="container">
-    <h1>👩‍🏫 Welcome, Teacher</h1>
     <h1>👩‍🏫 Teacher Panel</h1>
 
-    <textarea id="questionInput" placeholder="Enter question here..."></textarea>
-    <input type="number" id="timeLimit" placeholder="Time limit (in seconds)" />
     <section>
       <h3>Send Question</h3>
       <textarea id="questionInput" rows="3" placeholder="Type question..."></textarea>
@@ -32,11 +26,8 @@
       <p id="sendStatus" style="color:green;"></p>
     </section>
 
-    <button onclick="sendQuestion()">Send Question</button>
     <hr/>
 
-    <h2>📥 Submitted Answers</h2>
-    <ul id="answerList"></ul>
     <section>
       <h3>Live Answers</h3>
       <div id="answersContainer">
@@ -47,15 +38,10 @@
 
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <script>
-    const API_URL = "https://online-class-m8h6.onrender.com";
-    const socket = io(API_URL);
     (function(){
       const API_URL = "https://online-class-m8h6.onrender.com";
       const socket = io(API_URL); // connect to your server
 
-    async function sendQuestion() {
-      const question = document.getElementById("questionInput").value.trim();
-      const timeLimit = document.getElementById("timeLimit").value.trim();
       // Elements
       const questionInput = document.getElementById("questionInput");
       const timeLimitInput = document.getElementById("timeLimit");
@@ -63,9 +49,6 @@
       const sendStatus = document.getElementById("sendStatus");
       const answersContainer = document.getElementById("answersContainer");
 
-      if (!question || !timeLimit) {
-        return alert("Please enter question and time!");
-      }
       // Send question to backend (saves to DB) then emit socket event server expects
       sendBtn.addEventListener("click", async () => {
         const question = questionInput.value.trim();
@@ -96,11 +79,6 @@
             questionId: q._id
           });
 
-      // Send to backend for saving
-      const res = await fetch(`${API_URL}/teacher/send-question`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, timeLimit }),
           sendStatus.innerText = "Question broadcasted ✓";
           questionInput.value = "";
           timeLimitInput.value = "";
@@ -113,9 +91,6 @@
         }
       });
 
-      const data = await res.json();
-      if (data.success) {
-        alert("✅ Question sent successfully!");
       // Show student answers in teacher UI
       // Server uses: socket.on("student-answer", (data) => io.emit("student-answer", data));
       // So teacher should listen for "student-answer"
@@ -140,18 +115,12 @@
 
         const controls = document.createElement("div");
 
-        // 🔥 Broadcast to students
-        socket.emit("newQuestion", { question, timeLimit });
         const marksInput = document.createElement("input");
         marksInput.type = "number";
         marksInput.placeholder = "Marks";
         marksInput.style.width = "120px";
         marksInput.id = `marks-${studentName}-${questionId}`;
 
-        document.getElementById("questionInput").value = "";
-        document.getElementById("timeLimit").value = "";
-      } else {
-        alert("❌ Failed to send question.");
         const submitBtn = document.createElement("button");
         submitBtn.innerText = "Submit Marks";
         submitBtn.style.marginLeft = "8px";
@@ -191,14 +160,6 @@
         if (!str) return "";
         return str.replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[m]));
       }
-    }
-
-    // Receive answers from students
-    socket.on("answerSubmitted", (data) => {
-      const li = document.createElement("li");
-      li.innerHTML = `<b>${data.studentName}:</b> ${data.answer}`;
-      document.getElementById("answerList").appendChild(li);
-    });
 
       // Debug: show socket connection errors
       socket.on("connect", () => {
