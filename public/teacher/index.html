@@ -6,12 +6,12 @@
   <title>Teacher Panel | Online Test</title>
   <link rel="stylesheet" href="style.css" />
   <style>
-    /* small inline styles so it looks okay if you didn't change style.css */
     body { font-family: Arial, sans-serif; padding: 20px; background:#f7f7f7; }
     .container{ max-width:800px; margin:0 auto; background:#fff; padding:20px; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.08); }
     textarea, input { width:100%; padding:10px; margin:8px 0; box-sizing:border-box; }
     button { padding:10px 14px; margin-top:8px; cursor:pointer; }
     .answer-card{ border:1px solid #eee; padding:10px; margin:10px 0; border-radius:6px; background:#fafafa; }
+    #rankBox { margin-top:20px; padding:10px; background:#eef9ff; border-radius:6px; }
   </style>
 </head>
 <body>
@@ -30,147 +30,139 @@
 
     <section>
       <h3>Live Answers</h3>
-      <div id="answersContainer">
-        <!-- Answer cards appended here -->
-      </div>
+      <div id="answersContainer"></div>
     </section>
+
+    <button id="generateRanks">Generate Ranks 🏆</button>
+    <div id="rankBox" style="display:none;"></div>
+
+    <br>
+    <button id="exportPDF">Export PDF 📄</button>
+
   </div>
 
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
   <script>
     (function(){
       const API_URL = "https://online-class-m8h6.onrender.com";
-      const socket = io(API_URL); // connect to your server
+      const socket = io(API_URL);
 
-      // Elements
+      let currentQuestion = "";
+
       const questionInput = document.getElementById("questionInput");
       const timeLimitInput = document.getElementById("timeLimit");
-      const sendBtn = document.getElementById("sendBtn");
-      const sendStatus = document.getElementById("sendStatus");
       const answersContainer = document.getElementById("answersContainer");
+      const rankBox = document.getElementById("rankBox");
 
-      // Send question to backend (saves to DB) then emit socket event server expects
-      sendBtn.addEventListener("click", async () => {
+      document.getElementById("sendBtn").addEventListener("click", async () => {
         const question = questionInput.value.trim();
         const timeLimit = timeLimitInput.value.trim();
+        if(!question || !timeLimit) return alert("Enter question & time limit");
 
-        if (!question || !timeLimit) {
-          return alert("Please enter a question and time limit.");
-        }
+        const res = await fetch(`${API_URL}/teacher/add-question`, {
+          method:"POST", headers:{ "Content-Type":"application/json" },
+          body:JSON.stringify({ question, timeLimit })
+        });
+        const q = await res.json();
 
-        sendStatus.innerText = "Sending...";
-        try {
-          const res = await fetch(`${API_URL}/teacher/add-question`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ question, timeLimit })
-          });
+        currentQuestion = q.question;
 
-          if (!res.ok) throw new Error("Failed to save question (status " + res.status + ")");
-
-          const q = await res.json(); // q should be the saved question object (with _id)
-          sendStatus.innerText = "Question saved. Broadcasting to students...";
-
-          // Emit the exact event server listens for:
-          // server.js: socket.on("teacher-question", (data) => { io.emit("new-question", data); });
-          socket.emit("teacher-question", {
-            question: q.question,
-            timeLimit: q.timeLimit,
-            questionId: q._id
-          });
-
-          sendStatus.innerText = "Question broadcasted ✓";
-          questionInput.value = "";
-          timeLimitInput.value = "";
-          setTimeout(()=> sendStatus.innerText = "", 2500);
-        } catch (err) {
-          console.error(err);
-          sendStatus.style.color = "red";
-          sendStatus.innerText = "Error sending question: " + (err.message || err);
-          setTimeout(()=> { sendStatus.innerText = ""; sendStatus.style.color = "green"; }, 4000);
-        }
-      });
-
-      // Show student answers in teacher UI
-      // Server uses: socket.on("student-answer", (data) => io.emit("student-answer", data));
-      // So teacher should listen for "student-answer"
-      socket.on("student-answer", (data) => {
-        // data expected: { studentName, answer, questionId }
-        addAnswerCard(data);
-      });
-
-      // Add answer card with marks input and submit button
-      function addAnswerCard({ studentName, answer, questionId }) {
-        const card = document.createElement("div");
-        card.className = "answer-card";
-
-        const studentLine = document.createElement("div");
-        studentLine.innerHTML = `<strong>${escapeHtml(studentName)}</strong>`;
-        card.appendChild(studentLine);
-
-        const answerLine = document.createElement("div");
-        answerLine.style.margin = "8px 0";
-        answerLine.innerText = answer;
-        card.appendChild(answerLine);
-
-        const controls = document.createElement("div");
-
-        const marksInput = document.createElement("input");
-        marksInput.type = "number";
-        marksInput.placeholder = "Marks";
-        marksInput.style.width = "120px";
-        marksInput.id = `marks-${studentName}-${questionId}`;
-
-        const submitBtn = document.createElement("button");
-        submitBtn.innerText = "Submit Marks";
-        submitBtn.style.marginLeft = "8px";
-
-        submitBtn.addEventListener("click", async () => {
-          const marks = marksInput.value;
-          if (marks === "") return alert("Enter marks first");
-          try {
-            const res = await fetch(`${API_URL}/teacher/mark-answer`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ studentName, questionId, marks })
-            });
-            const json = await res.json();
-            if (json.success) {
-              submitBtn.innerText = "Saved ✓";
-              submitBtn.disabled = true;
-              marksInput.disabled = true;
-            } else {
-              alert("Failed to save marks");
-            }
-          } catch (err) {
-            console.error(err);
-            alert("Error saving marks");
-          }
+        socket.emit("teacher-question", {
+          question: q.question,
+          timeLimit: q.timeLimit,
+          questionId: q._id
         });
 
-        controls.appendChild(marksInput);
-        controls.appendChild(submitBtn);
-        card.appendChild(controls);
+        questionInput.value = "";
+        timeLimitInput.value = "";
+        document.getElementById("sendStatus").innerText = "✅ Sent!";
+      });
 
-        answersContainer.prepend(card);
+      socket.on("student-answer", ({ studentName, answer, questionId }) => {
+        addAnswerCard(studentName, answer, questionId);
+      });
+
+      function addAnswerCard(studentName, answer, questionId){
+        const div = document.createElement("div");
+        div.className = "answer-card";
+
+        div.innerHTML = `
+          <b>${studentName}</b>
+          <p>${answer}</p>
+          <input type="number" placeholder="Marks" class="mark-input">
+          <button class="mark-btn">Submit Marks</button>
+        `;
+
+        div.querySelector(".mark-btn").onclick = async () => {
+          const marks = div.querySelector(".mark-input").value;
+          if(marks==="") return alert("Enter marks first");
+
+          const res = await fetch(`${API_URL}/teacher/mark-answer`, {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body:JSON.stringify({ studentName, questionId, marks })
+          });
+
+          const r = await res.json();
+          if(r.success){
+            div.querySelector(".mark-btn").innerText="✅ Saved";
+            div.querySelector(".mark-btn").disabled=true;
+            div.querySelector(".mark-input").disabled=true;
+          }
+        };
+
+        answersContainer.prepend(div);
       }
 
-      // simple escape to avoid malformed HTML when using names
-      function escapeHtml(str) {
-        if (!str) return "";
-        return str.replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[m]));
-      }
+      document.getElementById("generateRanks").onclick = () => {
+        const results = [...document.querySelectorAll(".answer-card")].map(card => {
+          return {
+            name: card.querySelector("b").innerText,
+            marks: parseFloat(card.querySelector(".mark-input")?.value || 0)
+          };
+        }).sort((a,b)=> b.marks-a.marks);
 
-      // Debug: show socket connection errors
-      socket.on("connect", () => {
-        console.log("Socket connected:", socket.id);
-      });
-      socket.on("connect_error", (err) => {
-        console.error("Socket connect_error:", err);
-      });
-      socket.on("disconnect", (reason) => {
-        console.log("Socket disconnected:", reason);
-      });
+        rankBox.style.display="block";
+        rankBox.innerHTML = "<h3>🏆 Rank List</h3>" + results.map((r,i)=>`${i+1}. ${r.name} - ${r.marks}`).join("<br>");
+      };
+
+      document.getElementById("exportPDF").onclick = () => {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        const filename = currentQuestion
+          ? currentQuestion.substring(0,20).replace(/[^a-zA-Z0-9]/g,"_") + "_" + new Date().toLocaleDateString() + ".pdf"
+          : "student_results.pdf";
+
+        doc.setFontSize(15);
+        doc.text("Student Responses Report", 10, 15);
+
+        if(currentQuestion){
+          doc.text("Question: " + currentQuestion, 10, 25);
+        }
+
+        let y = 40;
+
+        const data = [...document.querySelectorAll(".answer-card")].map(card => {
+          return {
+            name: card.querySelector("b").innerText,
+            answer: card.querySelector("p").innerText,
+            marks: parseFloat(card.querySelector(".mark-input")?.value || 0)
+          };
+        }).sort((a,b)=> b.marks-a.marks);
+
+        data.forEach((d,i)=>{
+          doc.text(`${i+1}. ${d.name} | Marks: ${d.marks}`, 10, y);
+          y+=7;
+          doc.text("Answer: " + d.answer, 10, y);
+          y+=12;
+          if(y > 270){ doc.addPage(); y = 20; }
+        });
+
+        doc.save(filename);
+      };
 
     })();
   </script>
