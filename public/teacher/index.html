@@ -36,14 +36,14 @@
 
       if (!question || !timeLimit) return alert("Please enter a question and time limit.");
 
-      const res = await fetch(`${API_URL}/teacher/question`, {
+      const res = await fetch(`${API_URL}/teacher/add-question`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question, timeLimit }),
       });
 
       const data = await res.json();
-      if (data.success) {
+      if (data) {
         socket.emit("newQuestion", { question, timeLimit });
         alert("Question sent to students!");
         document.getElementById("question").value = "";
@@ -59,20 +59,20 @@
       el.innerHTML = `
         <p><b>${data.studentName}</b>: ${data.answer}</p>
         <input type="number" id="marks-${data.studentName}" placeholder="Marks" />
-        <button onclick="submitMarks('${data.studentName}')">Submit Marks</button>
+        <button onclick="submitMarks('${data.studentName}', '${data.questionId}')">Submit Marks</button>
         <hr>
       `;
       answersDiv.appendChild(el);
     });
 
-    async function submitMarks(studentName) {
+    async function submitMarks(studentName, questionId) {
       const marks = document.getElementById(`marks-${studentName}`).value;
       if (!marks) return alert("Please enter marks.");
 
-      const res = await fetch(`${API_URL}/teacher/marks`, {
+      const res = await fetch(`${API_URL}/teacher/mark-answer`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentName, marks }),
+        body: JSON.stringify({ studentName, questionId, marks }),
       });
 
       const data = await res.json();
@@ -80,7 +80,7 @@
     }
 
     async function endTest() {
-      const res = await fetch(`${API_URL}/teacher/endtest`);
+      const res = await fetch(`${API_URL}/teacher/generate-report`);
       const blob = await res.blob();
 
       const link = document.createElement("a");
@@ -91,4 +91,3 @@
   </script>
 </body>
 </html>
-
