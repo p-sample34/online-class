@@ -3,63 +3,215 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Teacher Panel</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Teacher Panel | Online Test</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* small inline styles so it looks okay if you didn't change style.css */
+    body { font-family: Arial, sans-serif; padding: 20px; background:#f7f7f7; }
+    .container{ max-width:800px; margin:0 auto; background:#fff; padding:20px; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.08); }
+    textarea, input { width:100%; padding:10px; margin:8px 0; box-sizing:border-box; }
+    button { padding:10px 14px; margin-top:8px; cursor:pointer; }
+    .answer-card{ border:1px solid #eee; padding:10px; margin:10px 0; border-radius:6px; background:#fafafa; }
+  </style>
 </head>
 <body>
   <div class="container">
+    <h1>👩‍🏫 Welcome, Teacher</h1>
     <h1>👩‍🏫 Teacher Panel</h1>
 
-    <textarea id="questionInput" placeholder="Enter question..."></textarea>
-    <input type="number" id="timeLimit" placeholder="Time (seconds)">
+    <textarea id="questionInput" placeholder="Enter question here..."></textarea>
+    <input type="number" id="timeLimit" placeholder="Time limit (in seconds)" />
+    <section>
+      <h3>Send Question</h3>
+      <textarea id="questionInput" rows="3" placeholder="Type question..."></textarea>
+      <input id="timeLimit" type="number" placeholder="Time limit (seconds)" />
+      <button id="sendBtn">Send Question</button>
+      <p id="sendStatus" style="color:green;"></p>
+    </section>
 
     <button onclick="sendQuestion()">Send Question</button>
+    <hr/>
 
-    <h2>📥 Student Answers</h2>
+    <h2>📥 Submitted Answers</h2>
     <ul id="answerList"></ul>
-
-    <button onclick="endTest()" style="margin-top:20px;">📄 End Test & Download PDF</button>
+    <section>
+      <h3>Live Answers</h3>
+      <div id="answersContainer">
+        <!-- Answer cards appended here -->
+      </div>
+    </section>
   </div>
 
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <script>
     const API_URL = "https://online-class-m8h6.onrender.com";
     const socket = io(API_URL);
+    (function(){
+      const API_URL = "https://online-class-m8h6.onrender.com";
+      const socket = io(API_URL); // connect to your server
 
     async function sendQuestion() {
       const question = document.getElementById("questionInput").value.trim();
       const timeLimit = document.getElementById("timeLimit").value.trim();
+      // Elements
+      const questionInput = document.getElementById("questionInput");
+      const timeLimitInput = document.getElementById("timeLimit");
+      const sendBtn = document.getElementById("sendBtn");
+      const sendStatus = document.getElementById("sendStatus");
+      const answersContainer = document.getElementById("answersContainer");
 
-      if (!question || !timeLimit) return alert("Enter question & time!");
+      if (!question || !timeLimit) {
+        return alert("Please enter question and time!");
+      }
+      // Send question to backend (saves to DB) then emit socket event server expects
+      sendBtn.addEventListener("click", async () => {
+        const question = questionInput.value.trim();
+        const timeLimit = timeLimitInput.value.trim();
 
-      await fetch(`${API_URL}/teacher/send-question`, {
+        if (!question || !timeLimit) {
+          return alert("Please enter a question and time limit.");
+        }
+
+        sendStatus.innerText = "Sending...";
+        try {
+          const res = await fetch(`${API_URL}/teacher/add-question`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ question, timeLimit })
+          });
+
+          if (!res.ok) throw new Error("Failed to save question (status " + res.status + ")");
+
+          const q = await res.json(); // q should be the saved question object (with _id)
+          sendStatus.innerText = "Question saved. Broadcasting to students...";
+
+          // Emit the exact event server listens for:
+          // server.js: socket.on("teacher-question", (data) => { io.emit("new-question", data); });
+          socket.emit("teacher-question", {
+            question: q.question,
+            timeLimit: q.timeLimit,
+            questionId: q._id
+          });
+
+      // Send to backend for saving
+      const res = await fetch(`${API_URL}/teacher/send-question`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question, timeLimit }),
+          sendStatus.innerText = "Question broadcasted ✓";
+          questionInput.value = "";
+          timeLimitInput.value = "";
+          setTimeout(()=> sendStatus.innerText = "", 2500);
+        } catch (err) {
+          console.error(err);
+          sendStatus.style.color = "red";
+          sendStatus.innerText = "Error sending question: " + (err.message || err);
+          setTimeout(()=> { sendStatus.innerText = ""; sendStatus.style.color = "green"; }, 4000);
+        }
       });
 
-      socket.emit("new-question", { question, timeLimit });
+      const data = await res.json();
+      if (data.success) {
+        alert("✅ Question sent successfully!");
+      // Show student answers in teacher UI
+      // Server uses: socket.on("student-answer", (data) => io.emit("student-answer", data));
+      // So teacher should listen for "student-answer"
+      socket.on("student-answer", (data) => {
+        // data expected: { studentName, answer, questionId }
+        addAnswerCard(data);
+      });
 
-      alert("✅ Question Sent!");
-      document.getElementById("questionInput").value = "";
-      document.getElementById("timeLimit").value = "";
+      // Add answer card with marks input and submit button
+      function addAnswerCard({ studentName, answer, questionId }) {
+        const card = document.createElement("div");
+        card.className = "answer-card";
+
+        const studentLine = document.createElement("div");
+        studentLine.innerHTML = `<strong>${escapeHtml(studentName)}</strong>`;
+        card.appendChild(studentLine);
+
+        const answerLine = document.createElement("div");
+        answerLine.style.margin = "8px 0";
+        answerLine.innerText = answer;
+        card.appendChild(answerLine);
+
+        const controls = document.createElement("div");
+
+        // 🔥 Broadcast to students
+        socket.emit("newQuestion", { question, timeLimit });
+        const marksInput = document.createElement("input");
+        marksInput.type = "number";
+        marksInput.placeholder = "Marks";
+        marksInput.style.width = "120px";
+        marksInput.id = `marks-${studentName}-${questionId}`;
+
+        document.getElementById("questionInput").value = "";
+        document.getElementById("timeLimit").value = "";
+      } else {
+        alert("❌ Failed to send question.");
+        const submitBtn = document.createElement("button");
+        submitBtn.innerText = "Submit Marks";
+        submitBtn.style.marginLeft = "8px";
+
+        submitBtn.addEventListener("click", async () => {
+          const marks = marksInput.value;
+          if (marks === "") return alert("Enter marks first");
+          try {
+            const res = await fetch(`${API_URL}/teacher/mark-answer`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ studentName, questionId, marks })
+            });
+            const json = await res.json();
+            if (json.success) {
+              submitBtn.innerText = "Saved ✓";
+              submitBtn.disabled = true;
+              marksInput.disabled = true;
+            } else {
+              alert("Failed to save marks");
+            }
+          } catch (err) {
+            console.error(err);
+            alert("Error saving marks");
+          }
+        });
+
+        controls.appendChild(marksInput);
+        controls.appendChild(submitBtn);
+        card.appendChild(controls);
+
+        answersContainer.prepend(card);
+      }
+
+      // simple escape to avoid malformed HTML when using names
+      function escapeHtml(str) {
+        if (!str) return "";
+        return str.replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[m]));
+      }
     }
 
-    socket.on("student-answer", (data) => {
-      const list = document.getElementById("answerList");
+    // Receive answers from students
+    socket.on("answerSubmitted", (data) => {
       const li = document.createElement("li");
       li.innerHTML = `<b>${data.studentName}:</b> ${data.answer}`;
-      list.appendChild(li);
+      document.getElementById("answerList").appendChild(li);
     });
 
-    async function endTest() {
-      const response = await fetch(`${API_URL}/teacher/endtest`);
-      const blob = await response.blob();
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = "Test-Report.pdf";
-      link.click();
-    }
+      // Debug: show socket connection errors
+      socket.on("connect", () => {
+        console.log("Socket connected:", socket.id);
+      });
+      socket.on("connect_error", (err) => {
+        console.error("Socket connect_error:", err);
+      });
+      socket.on("disconnect", (reason) => {
+        console.log("Socket disconnected:", reason);
+      });
+
+    })();
   </script>
 </body>
 </html>
