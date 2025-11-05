@@ -8,15 +8,18 @@
 </head>
 <body>
   <div class="container">
-    <h1>👩‍🏫 Welcome, Teacher</h1>
+    <h1>👩‍🏫 Welcome, <span id="teacherName"></span></h1>
 
-    <textarea id="questionInput" placeholder="Enter question here..."></textarea>
-    <input type="number" id="timeLimit" placeholder="Time limit (in seconds)" />
-
+    <h2>Ask a Question</h2>
+    <textarea id="question" placeholder="Enter your question here..."></textarea>
+    <input type="number" id="time" placeholder="Time limit (in seconds)" />
     <button onclick="sendQuestion()">Send Question</button>
 
-    <h2>📥 Submitted Answers</h2>
-    <ul id="answerList"></ul>
+    <h2>Answers</h2>
+    <div id="answers"></div>
+
+    <br><br>
+    <button onclick="endTest()">📄 End Test & Download PDF</button>
   </div>
 
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
@@ -24,41 +27,67 @@
     const API_URL = "https://online-class-m8h6.onrender.com";
     const socket = io(API_URL);
 
+    const teacherName = localStorage.getItem("teacherName");
+    document.getElementById("teacherName").innerText = teacherName || "Teacher";
+
     async function sendQuestion() {
-      const question = document.getElementById("questionInput").value.trim();
-      const timeLimit = document.getElementById("timeLimit").value.trim();
+      const question = document.getElementById("question").value.trim();
+      const timeLimit = document.getElementById("time").value;
 
-      if (!question || !timeLimit) {
-        return alert("Please enter question and time!");
-      }
+      if (!question || !timeLimit) return alert("Please enter a question and time limit.");
 
-      // Send to backend for saving
-      const res = await fetch(`${API_URL}/teacher/send-question`, {
+      const res = await fetch(`${API_URL}/teacher/add-question`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question, timeLimit }),
       });
 
       const data = await res.json();
-      if (data.success) {
-        alert("✅ Question sent successfully!");
-
-        // 🔥 Broadcast to students
+      if (data) {
         socket.emit("newQuestion", { question, timeLimit });
-
-        document.getElementById("questionInput").value = "";
-        document.getElementById("timeLimit").value = "";
+        alert("Question sent to students!");
+        document.getElementById("question").value = "";
+        document.getElementById("time").value = "";
       } else {
-        alert("❌ Failed to send question.");
+        alert("Error sending question.");
       }
     }
 
-    // Receive answers from students
     socket.on("answerSubmitted", (data) => {
-      const li = document.createElement("li");
-      li.innerHTML = `<b>${data.studentName}:</b> ${data.answer}`;
-      document.getElementById("answerList").appendChild(li);
+      const answersDiv = document.getElementById("answers");
+      const el = document.createElement("div");
+      el.innerHTML = `
+        <p><b>${data.studentName}</b>: ${data.answer}</p>
+        <input type="number" id="marks-${data.studentName}" placeholder="Marks" />
+        <button onclick="submitMarks('${data.studentName}', '${data.questionId}')">Submit Marks</button>
+        <hr>
+      `;
+      answersDiv.appendChild(el);
     });
+
+    async function submitMarks(studentName, questionId) {
+      const marks = document.getElementById(`marks-${studentName}`).value;
+      if (!marks) return alert("Please enter marks.");
+
+      const res = await fetch(`${API_URL}/teacher/mark-answer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentName, questionId, marks }),
+      });
+
+      const data = await res.json();
+      if (data.success) alert("Marks submitted!");
+    }
+
+    async function endTest() {
+      const res = await fetch(`${API_URL}/teacher/generate-report`);
+      const blob = await res.blob();
+
+      const link = document.createElement("a");
+      link.href = window.URL.createObjectURL(blob);
+      link.download = "test-report.pdf";
+      link.click();
+    }
   </script>
 </body>
 </html>
