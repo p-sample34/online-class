@@ -42,129 +42,170 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-  <script>
-    (function(){
-      const API_URL = "https://online-class-m8h6.onrender.com";
-      const socket = io(API_URL);
+<script>
+(function(){
+  const API_URL = "https://online-class-m8h6.onrender.com";
+  const socket = io(API_URL);
 
-      let currentQuestion = "";
+  let currentQuestion = "";
 
-      const questionInput = document.getElementById("questionInput");
-      const timeLimitInput = document.getElementById("timeLimit");
-      const answersContainer = document.getElementById("answersContainer");
-      const rankBox = document.getElementById("rankBox");
+  const questionInput = document.getElementById("questionInput");
+  const timeLimitInput = document.getElementById("timeLimit");
+  const answersContainer = document.getElementById("answersContainer");
+  const rankBox = document.getElementById("rankBox");
 
-      document.getElementById("sendBtn").addEventListener("click", async () => {
-        const question = questionInput.value.trim();
-        const timeLimit = timeLimitInput.value.trim();
-        if(!question || !timeLimit) return alert("Enter question & time limit");
+  document.getElementById("sendBtn").addEventListener("click", async () => {
+    const question = questionInput.value.trim();
+    const timeLimit = timeLimitInput.value.trim();
+    if(!question || !timeLimit) return alert("Enter question & time limit");
 
-        const res = await fetch(`${API_URL}/teacher/add-question`, {
-          method:"POST", headers:{ "Content-Type":"application/json" },
-          body:JSON.stringify({ question, timeLimit })
-        });
-        const q = await res.json();
+    const res = await fetch(`${API_URL}/teacher/add-question`, {
+      method:"POST", headers:{ "Content-Type":"application/json" },
+      body:JSON.stringify({ question, timeLimit })
+    });
+    const q = await res.json();
 
-        currentQuestion = q.question;
+    currentQuestion = q.question;
 
-        socket.emit("teacher-question", {
-          question: q.question,
-          timeLimit: q.timeLimit,
-          questionId: q._id
-        });
+    socket.emit("teacher-question", {
+      question: q.question,
+      timeLimit: q.timeLimit,
+      questionId: q._id
+    });
 
-        questionInput.value = "";
-        timeLimitInput.value = "";
-        document.getElementById("sendStatus").innerText = "✅ Sent!";
+    questionInput.value = "";
+    timeLimitInput.value = "";
+    document.getElementById("sendStatus").innerText = "✅ Sent!";
+  });
+
+  socket.on("student-answer", ({ studentName, answer, questionId }) => {
+    addAnswerCard(studentName, answer, questionId);
+  });
+
+  function addAnswerCard(studentName, answer, questionId){
+    const div = document.createElement("div");
+    div.className = "answer-card";
+
+    div.innerHTML = `
+      <b>${studentName}</b>
+      <p>${answer}</p>
+      <input type="number" placeholder="Marks" class="mark-input">
+      <button class="mark-btn">Submit Marks</button>
+    `;
+
+    div.querySelector(".mark-btn").onclick = async () => {
+      const marks = div.querySelector(".mark-input").value;
+      if(marks==="") return alert("Enter marks first");
+
+      const res = await fetch(`${API_URL}/teacher/mark-answer`, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({ studentName, questionId, marks })
       });
 
-      socket.on("student-answer", ({ studentName, answer, questionId }) => {
-        addAnswerCard(studentName, answer, questionId);
-      });
-
-      function addAnswerCard(studentName, answer, questionId){
-        const div = document.createElement("div");
-        div.className = "answer-card";
-
-        div.innerHTML = `
-          <b>${studentName}</b>
-          <p>${answer}</p>
-          <input type="number" placeholder="Marks" class="mark-input">
-          <button class="mark-btn">Submit Marks</button>
-        `;
-
-        div.querySelector(".mark-btn").onclick = async () => {
-          const marks = div.querySelector(".mark-input").value;
-          if(marks==="") return alert("Enter marks first");
-
-          const res = await fetch(`${API_URL}/teacher/mark-answer`, {
-            method:"POST",
-            headers:{ "Content-Type":"application/json" },
-            body:JSON.stringify({ studentName, questionId, marks })
-          });
-
-          const r = await res.json();
-          if(r.success){
-            div.querySelector(".mark-btn").innerText="✅ Saved";
-            div.querySelector(".mark-btn").disabled=true;
-            div.querySelector(".mark-input").disabled=true;
-          }
-        };
-
-        answersContainer.prepend(div);
+      const r = await res.json();
+      if(r.success){
+        div.querySelector(".mark-btn").innerText="✅ Saved";
+        div.querySelector(".mark-btn").disabled=true;
+        div.querySelector(".mark-input").disabled=true;
       }
+    };
 
-      document.getElementById("generateRanks").onclick = () => {
-        const results = [...document.querySelectorAll(".answer-card")].map(card => {
-          return {
-            name: card.querySelector("b").innerText,
-            marks: parseFloat(card.querySelector(".mark-input")?.value || 0)
-          };
-        }).sort((a,b)=> b.marks-a.marks);
+    answersContainer.prepend(div);
+  }
 
-        rankBox.style.display="block";
-        rankBox.innerHTML = "<h3>🏆 Rank List</h3>" + results.map((r,i)=>`${i+1}. ${r.name} - ${r.marks}`).join("<br>");
-      };
+  /* ---------------------------------------------------------
+    ✅ 1. Generate Rank List with TOTAL marks of each student
+  ----------------------------------------------------------*/
+  document.getElementById("generateRanks").onclick = () => {
+    const cards = [...document.querySelectorAll(".answer-card")];
 
-      document.getElementById("exportPDF").onclick = () => {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
+    const combined = {};
 
-        const filename = currentQuestion
-          ? currentQuestion.substring(0,20).replace(/[^a-zA-Z0-9]/g,"_") + "_" + new Date().toLocaleDateString() + ".pdf"
-          : "student_results.pdf";
+    cards.forEach(card => {
+      const name = card.querySelector("b").innerText;
+      const marks = parseFloat(card.querySelector(".mark-input")?.value || 0);
 
-        doc.setFontSize(15);
-        doc.text("Student Responses Report", 10, 15);
+      if(!combined[name]) combined[name] = 0;
+      combined[name] += marks;
+    });
 
-        if(currentQuestion){
-          doc.text("Question: " + currentQuestion, 10, 25);
-        }
+    const results = Object.entries(combined)
+      .map(([name, total]) => ({ name, total }))
+      .sort((a,b)=> b.total - a.total);
 
-        let y = 40;
+    rankBox.style.display="block";
+    rankBox.innerHTML = "<h3>🏆 Rank List</h3>" +
+      results.map((r,i)=>`${i+1}. ${r.name} - ${r.total}`).join("<br>");
+  };
 
-        const data = [...document.querySelectorAll(".answer-card")].map(card => {
-          return {
-            name: card.querySelector("b").innerText,
-            answer: card.querySelector("p").innerText,
-            marks: parseFloat(card.querySelector(".mark-input")?.value || 0)
-          };
-        }).sort((a,b)=> b.marks-a.marks);
 
-        data.forEach((d,i)=>{
-          doc.text(`${i+1}. ${d.name} | Marks: ${d.marks}`, 10, y);
-          y+=7;
-          doc.text("Answer: " + d.answer, 10, y);
-          y+=12;
-          if(y > 270){ doc.addPage(); y = 20; }
-        });
+  /* ---------------------------------------------------------
+    ✅ 2. Export PDF grouping answers by student name
+  ----------------------------------------------------------*/
+  document.getElementById("exportPDF").onclick = () => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
 
-        doc.save(filename);
-      };
+    const filename = currentQuestion
+      ? currentQuestion.substring(0,20).replace(/[^a-zA-Z0-9]/g,"_") + "_" + new Date().toLocaleDateString() + ".pdf"
+      : "student_results.pdf";
 
-    })();
+    doc.setFontSize(15);
+    doc.text("Student Responses Report", 10, 15);
+
+    if(currentQuestion){
+      doc.text("Question: " + currentQuestion, 10, 25);
+    }
+
+    let y = 40;
+
+    // Group answers by student
+    const grouped = {};
+
+    [...document.querySelectorAll(".answer-card")].forEach(card => {
+      const name = card.querySelector("b").innerText;
+      const answer = card.querySelector("p").innerText;
+      const marks = parseFloat(card.querySelector(".mark-input")?.value || 0);
+
+      if(!grouped[name]) grouped[name] = [];
+      grouped[name].push({ answer, marks });
+    });
+
+    // Convert object to array for sorting
+    const sortedNames = Object.keys(grouped);
+
+    sortedNames.forEach((name) => {
+      const studentAnswers = grouped[name];
+      const totalMarks = studentAnswers.reduce((a,b)=>a+b.marks,0);
+
+      doc.setFontSize(13);
+      doc.text(`${name}  | Total Marks: ${totalMarks}`, 10, y);
+      y += 10;
+
+      studentAnswers.forEach((ans, index) => {
+        doc.setFontSize(11);
+        doc.text(`• Q${index+1} Marks: ${ans.marks}`, 10, y);
+        y += 7;
+        doc.text(`Answer: ${ans.answer}`, 10, y);
+        y += 10;
+
+        if(y > 270){ doc.addPage(); y = 20; }
+      });
+
+      doc.line(10, y, 200, y); // separator
+      y += 8;
+    });
+
+    doc.save(filename);
+  };
+
+})();
+</script>
+
   </script>
 </body>
 </html>
+
