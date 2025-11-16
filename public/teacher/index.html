@@ -52,6 +52,7 @@
   const socket = io(API_URL);
 
   let currentQuestion = "";
+  let testName = "Untitled Test";
 
   const questionInput = document.getElementById("questionInput");
   const timeLimitInput = document.getElementById("timeLimit");
@@ -63,6 +64,9 @@
     const question = questionInput.value.trim();
     const timeLimit = timeLimitInput.value.trim();
     if(!question || !timeLimit) return alert("Enter question & time limit");
+
+    const namePrompt = prompt("Enter Test Name:");
+    if(namePrompt) testName = namePrompt;
 
     const res = await fetch(`${API_URL}/teacher/add-question`, {
       method:"POST", headers:{ "Content-Type":"application/json" },
@@ -83,7 +87,7 @@
     document.getElementById("sendStatus").innerText = "✅ Sent!";
   });
 
-  /* ----------------------- RECEIVE STUDENT ANSWERS ----------------------- */
+  /* ----------------------- RECEIVE STUDENT ANSWER ----------------------- */
   socket.on("student-answer", ({ studentName, answer, questionId }) => {
     addAnswerCard(studentName, answer, questionId);
   });
@@ -123,13 +127,11 @@
   /* ----------------------- GENERATE RANKS ----------------------- */
   document.getElementById("generateRanks").onclick = () => {
     const cards = [...document.querySelectorAll(".answer-card")];
-
     const combined = {};
 
     cards.forEach(card => {
       const name = card.querySelector("b").innerText;
       const marks = parseFloat(card.querySelector(".mark-input")?.value || 0);
-
       if(!combined[name]) combined[name] = 0;
       combined[name] += marks;
     });
@@ -143,21 +145,40 @@
       results.map((r,i)=>`${i+1}. ${r.name} - ${r.total}`).join("<br>");
   };
 
-  /* ----------------------- EXPORT PDF (FULL FIXED) ----------------------- */
-  document.getElementById("exportPDF").onclick = () => {
+  /* ----------------------- EXPORT PDF WITH LOGO + TITLE ----------------------- */
+  document.getElementById("exportPDF").onclick = async () => {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
-    const filename = currentQuestion
-      ? currentQuestion.substring(0,20).replace(/[^a-zA-Z0-9]/g,"_") + "_" + new Date().toLocaleDateString() + ".pdf"
-      : "student_results.pdf";
+    /* ------------------- LOGO URL ------------------- */
+    const logoURL = "https://ik.imagekit.io/eycpqxm26/cropped_circle_image.png"; // REPLACE WITH YOUR LOGO
 
-    doc.setFontSize(16);
-    doc.text("Student Responses Report", 10, 15);
+    // Convert image to Base64
+    const imgData = await fetch(logoURL).then(r => r.blob()).then(blob => {
+      return new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+    });
 
-    let y = 28;
+    /* ------------------- HEADER ---------------------- */
+    doc.addImage(imgData, "PNG", 10, 10, 25, 25);  // Logo left side
 
-    // Group answers by students
+    doc.setFontSize(18);
+    doc.text("SSVT Online Test Report", 40, 18);
+
+    doc.setFontSize(13);
+    doc.text("Date: " + new Date().toLocaleDateString(), 150, 18);
+
+    doc.setFontSize(14);
+    doc.text("Test Name: " + testName, 40, 30);
+
+    doc.line(10, 40, 200, 40); // separator
+
+    let y = 50;
+
+    /* ------------------- GROUP ANSWERS ------------------- */
     const grouped = {};
 
     [...document.querySelectorAll(".answer-card")].forEach(card => {
@@ -169,25 +190,23 @@
       grouped[name].push({ question: currentQuestion, answer, marks });
     });
 
-    const sortedNames = Object.keys(grouped);
-
-    sortedNames.forEach((name, index) => {
+    /* ------------------- PRINTING STUDENT REPORTS ------------------- */
+    Object.keys(grouped).forEach((name, index) => {
       const studentAnswers = grouped[name];
       const totalMarks = studentAnswers.reduce((a,b)=>a+b.marks,0);
 
-      doc.setFontSize(14);
+      doc.setFontSize(15);
       doc.text(`${index+1}) ${name}  | Total Marks: ${totalMarks}`, 10, y);
       y += 10;
 
       studentAnswers.forEach((qa, i) => {
-        doc.setFontSize(12);
-
-        // Wrap Question
+        // Question
         const qLines = doc.splitTextToSize(`Q${i+1}: ${qa.question}`, 180);
+        doc.setFontSize(12);
         doc.text(qLines, 10, y);
         y += qLines.length * 7;
 
-        // Wrap Answer
+        // Answer
         const aLines = doc.splitTextToSize(`Answer: ${qa.answer}`, 180);
         doc.text(aLines, 10, y);
         y += aLines.length * 7;
@@ -205,11 +224,9 @@
       if(y > 270){ doc.addPage(); y = 20; }
     });
 
-    doc.save(filename);
+    doc.save("SSVT_Report.pdf");
   };
 
 })();
 </script>
 
-</body>
-</html>
