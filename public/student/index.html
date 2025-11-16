@@ -1,77 +1,137 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Student Panel | Online Test</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<title>Student Panel | Online Test</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { font-family: Arial, sans-serif; background:#f2f2f2; padding:20px; }
+  .box { max-width:700px; margin:0 auto; background:#fff; padding:20px;
+         border-radius:8px; box-shadow:0 6px 14px rgba(0,0,0,0.1); }
+  textarea, input { width:100%; padding:10px; margin:8px 0; }
+  button { padding:10px 14px; cursor:pointer; }
+  #timer { font-size:20px; font-weight:bold; color:red; }
+</style>
 </head>
 <body>
-  <div class="container">
-    <h1>👨‍🎓 Welcome, <span id="studentName"></span></h1>
 
-    <div id="questionContainer">
-      <h2 id="questionBox">Waiting for teacher to send a question...</h2>
-      <p id="timer"></p>
-    </div>
+<div class="box">
+  <h2>🧑‍🎓 Student Panel</h2>
 
-    <div id="answerBox" style="display:none;">
-      <textarea id="answer" placeholder="Write your answer here..."></textarea>
-      <button onclick="submitAnswer()">Submit Answer</button>
-    </div>
-  </div>
+  <h3>Question</h3>
+  <p id="questionBox">Waiting for teacher...</p>
 
-  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-  <script>
+  <p id="timer"></p>
+
+  <textarea id="answerInput" rows="4" placeholder="Write your answer"></textarea>
+  <button id="sendAnswer">Submit Answer</button>
+
+  <p id="status" style="color:green;"></p>
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+(function(){
   const API_URL = "https://online-class-m8h6.onrender.com";
   const socket = io(API_URL);
 
-  const studentName = localStorage.getItem("studentName");
-  document.getElementById("studentName").innerText = studentName || "Student";
+  const questionBox = document.getElementById("questionBox");
+  const timerBox = document.getElementById("timer");
+  const answerInput = document.getElementById("answerInput");
 
-  // ✅ Listen for new question broadcast
-  socket.on("new-question", (data) => {
-    const { question, timeLimit } = data;
-    document.getElementById("questionBox").innerText = question;
-    document.getElementById("answerBox").style.display = "block";
+  let currentEndTime = null;
 
-    let timeLeft = parseInt(timeLimit);
-    const timer = setInterval(() => {
-      document.getElementById("timer").innerText = `⏱️ Time left: ${timeLeft}s`;
-      timeLeft--;
-      if (timeLeft < 0) {
-        clearInterval(timer);
-        submitAnswer();
-      }
-    }, 1000);
+  /* ---------------------------------------
+       RECEIVE QUESTION FROM TEACHER
+  -----------------------------------------*/
+  socket.on("new-question", data => {
+    const { question, timeLimit, questionId } = data;
+
+    questionBox.innerText = question;
+
+    // Save to localStorage
+    localStorage.setItem("activeQuestion", question);
+    localStorage.setItem("activeQuestionId", questionId);
+
+    // Timer end
+    const endTime = Date.now() + (timeLimit * 1000);
+    localStorage.setItem("endTime", endTime);
+
+    startTimer(endTime);
   });
 
-  async function submitAnswer() {
-    const answer = document.getElementById("answer").value.trim();
-    if (!answer) return alert("Please write your answer before submitting.");
+  /* ---------------------------------------
+        RESTORE QUESTION AFTER REFRESH
+  -----------------------------------------*/
+  window.onload = () => {
+    const savedQ = localStorage.getItem("activeQuestion");
+    const savedEnd = localStorage.getItem("endTime");
 
-    const res = await fetch(`${API_URL}/student/answer`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studentName, answer }),
+    if(savedQ && savedEnd && Date.now() < savedEnd){
+      questionBox.innerText = savedQ;
+      startTimer(savedEnd);
+    } else {
+      clearStoredQuestion();
+    }
+  };
+
+  /* ---------------------------------------
+                TIMER SYSTEM
+  -----------------------------------------*/
+  function startTimer(endTime){
+    currentEndTime = endTime;
+
+    const interval = setInterval(() => {
+      let diff = endTime - Date.now();
+      if(diff <= 0){
+        timerBox.innerText = "⛔ Time Over";
+        clearInterval(interval);
+        clearStoredQuestion();
+        questionBox.innerText = "Time Over";
+        answerInput.disabled = true;
+        return;
+      }
+
+      const sec = Math.floor(diff / 1000);
+      timerBox.innerText = "⏳ Time Left: " + sec + "s";
+
+    }, 1000);
+  }
+
+  function clearStoredQuestion(){
+    localStorage.removeItem("activeQuestion");
+    localStorage.removeItem("activeQuestionId");
+    localStorage.removeItem("endTime");
+  }
+
+  /* ---------------------------------------
+                SUBMIT ANSWER
+  -----------------------------------------*/
+  document.getElementById("sendAnswer").onclick = async () => {
+    const answer = answerInput.value.trim();
+    if(!answer) return alert("Write your answer!");
+
+    const qId = localStorage.getItem("activeQuestionId");
+
+    const res = await fetch(`${API_URL}/student/send-answer`, {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body:JSON.stringify({
+        studentName: prompt("Enter your name"),
+        answer,
+        questionId: qId
+      })
     });
 
-    const data = await res.json();
-    if (data.success) {
-      // ✅ Send answer to teacher in real-time
-      socket.emit("student-answer", { studentName, answer });
-
-      alert("Answer submitted!");
-      document.getElementById("answer").value = "";
-      document.getElementById("answerBox").style.display = "none";
-      document.getElementById("timer").innerText = "";
-    } else {
-      alert("Error submitting answer.");
+    const r = await res.json();
+    if(r.success){
+      document.getElementById("status").innerText = "Answer Submitted!";
+      answerInput.value = "";
     }
-  }
+  };
+
+})();
 </script>
 
 </body>
 </html>
-
-
