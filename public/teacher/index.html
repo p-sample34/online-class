@@ -4,39 +4,20 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Teacher Panel | Online Test</title>
-
+  <link rel="stylesheet" href="style.css" />
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; background:#f7f7f7; }
-    .container{
-      max-width:800px; margin:0 auto; background:#fff; padding:20px;
-      border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.08);
-    }
+    .container{ max-width:800px; margin:0 auto; background:#fff; padding:20px; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.08); }
     textarea, input { width:100%; padding:10px; margin:8px 0; box-sizing:border-box; }
-    button {
-      padding:10px 14px; margin-top:8px; cursor:pointer; background:black;
-      color:white; border:none; border-radius:5px;
-    }
-    .answer-card{
-      border:1px solid #eee; padding:10px; margin:10px 0;
-      border-radius:6px; background:#fafafa;
-    }
-    #rankBox {
-      margin-top:20px; padding:10px; background:#eef9ff;
-      border-radius:6px; display:none;
-    }
-    #testNameDisplay {
-      margin-bottom: 10px; font-size: 18px; font-weight: bold;
-      color:#333; padding:10px; background:#e3f2ff; border-radius:6px;
-    }
+    button { padding:10px 14px; margin-top:8px; cursor:pointer; }
+    .answer-card{ border:1px solid #eee; padding:10px; margin:10px 0; border-radius:6px; background:#fafafa; }
+    #rankBox { margin-top:20px; padding:10px; background:#eef9ff; border-radius:6px; }
   </style>
 </head>
 
 <body>
   <div class="container">
-
     <h1>👩‍🏫 Teacher Panel</h1>
-
-    <div id="testNameDisplay"></div>
 
     <section>
       <h3>Send Question</h3>
@@ -54,21 +35,18 @@
     </section>
 
     <button id="generateRanks">Generate Ranks 🏆</button>
-    <div id="rankBox"></div>
+    <div id="rankBox" style="display:none;"></div>
 
     <br><br>
-
     <button id="exportPDF">Export PDF 📄</button>
-    <br><br>
-    <button id="finishTest" style="background:red;">Finish Test ❌</button>
 
   </div>
 
-  <!-- LIBRARIES -->
+  <!-- SOCKET + PDF LIBRARIES -->
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-  <script>
+ <script>
 (function(){
   const API_URL = "https://online-class-m8h6.onrender.com";
   const socket = io(API_URL);
@@ -251,6 +229,7 @@
 
 })();
 </script>
+
+
 </body>
 </html>
-
