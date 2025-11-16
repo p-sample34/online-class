@@ -25,14 +25,23 @@
   <script>
     const API_URL = "https://online-class-m8h6.onrender.com";
     const socket = io(API_URL);
+  const API_URL = "https://online-class-m8h6.onrender.com";
+  const socket = io(API_URL);
 
     const studentName = localStorage.getItem("studentName");
     document.getElementById("studentName").innerText = studentName || "Student";
+  const studentName = localStorage.getItem("studentName");
+  document.getElementById("studentName").innerText = studentName || "Student";
 
     socket.on("newQuestion", (data) => {
       const { question, timeLimit } = data;
       document.getElementById("questionBox").innerText = question;
       document.getElementById("answerBox").style.display = "block";
+  // ✅ Listen for new question broadcast
+  socket.on("new-question", (data) => {
+    const { question, timeLimit } = data;
+    document.getElementById("questionBox").innerText = question;
+    document.getElementById("answerBox").style.display = "block";
 
       let timeLeft = parseInt(timeLimit);
       const timer = setInterval(() => {
@@ -44,16 +53,34 @@
         }
       }, 1000);
     });
+    let timeLeft = parseInt(timeLimit);
+    const timer = setInterval(() => {
+      document.getElementById("timer").innerText = `⏱️ Time left: ${timeLeft}s`;
+      timeLeft--;
+      if (timeLeft < 0) {
+        clearInterval(timer);
+        submitAnswer();
+      }
+    }, 1000);
+  });
 
     async function submitAnswer() {
       const answer = document.getElementById("answer").value.trim();
       if (!answer) return alert("Please write your answer before submitting.");
+  async function submitAnswer() {
+    const answer = document.getElementById("answer").value.trim();
+    if (!answer) return alert("Please write your answer before submitting.");
 
       const res = await fetch(`${API_URL}/student/answer`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ studentName, answer }),
       });
+    const res = await fetch(`${API_URL}/student/answer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studentName, answer }),
+    });
 
       const data = await res.json();
       if (data.success) {
@@ -65,8 +92,22 @@
       } else {
         alert("Error submitting answer.");
       }
+    const data = await res.json();
+    if (data.success) {
+      // ✅ Send answer to teacher in real-time
+      socket.emit("student-answer", { studentName, answer });
+
+      alert("Answer submitted!");
+      document.getElementById("answer").value = "";
+      document.getElementById("answerBox").style.display = "none";
+      document.getElementById("timer").innerText = "";
+    } else {
+      alert("Error submitting answer.");
     }
   </script>
+  }
+</script>
+
 </body>
 </html>
 
