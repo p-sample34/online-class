@@ -52,7 +52,6 @@
   const socket = io(API_URL);
 
   let currentQuestion = "";
-  let testName = "Untitled Test";
 
   const questionInput = document.getElementById("questionInput");
   const timeLimitInput = document.getElementById("timeLimit");
@@ -65,15 +64,13 @@
     const timeLimit = timeLimitInput.value.trim();
     if(!question || !timeLimit) return alert("Enter question & time limit");
 
-    const namePrompt = prompt("Enter Test Name:");
-    if(namePrompt) testName = namePrompt;
-
     const res = await fetch(`${API_URL}/teacher/add-question`, {
-      method:"POST", headers:{ "Content-Type":"application/json" },
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
       body:JSON.stringify({ question, timeLimit })
     });
-    const q = await res.json();
 
+    const q = await res.json();
     currentQuestion = q.question;
 
     socket.emit("teacher-question", {
@@ -145,15 +142,15 @@
       results.map((r,i)=>`${i+1}. ${r.name} - ${r.total}`).join("<br>");
   };
 
-  /* ----------------------- EXPORT PDF WITH LOGO + TITLE ----------------------- */
+  /* ----------------------- EXPORT PDF ----------------------- */
   document.getElementById("exportPDF").onclick = async () => {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
-    /* ------------------- LOGO URL ------------------- */
-    const logoURL = "https://i.ibb.co/zV9rQ4h/sample-logo.png"; // REPLACE WITH YOUR LOGO
+    /* Logo URL */
+    const logoURL = "https://i.ibb.co/zV9rQ4h/sample-logo.png";
 
-    // Convert image to Base64
+    // Convert image → Base64
     const imgData = await fetch(logoURL).then(r => r.blob()).then(blob => {
       return new Promise(resolve => {
         const reader = new FileReader();
@@ -163,7 +160,7 @@
     });
 
     /* ------------------- HEADER ---------------------- */
-    doc.addImage(imgData, "PNG", 10, 10, 25, 25);  // Logo left side
+    doc.addImage(imgData, "PNG", 10, 10, 25, 25);
 
     doc.setFontSize(18);
     doc.text("SSVT Online Test Report", 40, 18);
@@ -171,10 +168,7 @@
     doc.setFontSize(13);
     doc.text("Date: " + new Date().toLocaleDateString(), 150, 18);
 
-    doc.setFontSize(14);
-    doc.text("Test Name: " + testName, 40, 30);
-
-    doc.line(10, 40, 200, 40); // separator
+    doc.line(10, 40, 200, 40);
 
     let y = 50;
 
@@ -230,6 +224,6 @@
 })();
 </script>
 
-
 </body>
 </html>
+
