@@ -4,20 +4,39 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Teacher Panel | Online Test</title>
-  <link rel="stylesheet" href="style.css" />
+
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; background:#f7f7f7; }
-    .container{ max-width:800px; margin:0 auto; background:#fff; padding:20px; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.08); }
+    .container{
+      max-width:800px; margin:0 auto; background:#fff; padding:20px;
+      border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.08);
+    }
     textarea, input { width:100%; padding:10px; margin:8px 0; box-sizing:border-box; }
-    button { padding:10px 14px; margin-top:8px; cursor:pointer; }
-    .answer-card{ border:1px solid #eee; padding:10px; margin:10px 0; border-radius:6px; background:#fafafa; }
-    #rankBox { margin-top:20px; padding:10px; background:#eef9ff; border-radius:6px; }
+    button {
+      padding:10px 14px; margin-top:8px; cursor:pointer; background:black;
+      color:white; border:none; border-radius:5px;
+    }
+    .answer-card{
+      border:1px solid #eee; padding:10px; margin:10px 0;
+      border-radius:6px; background:#fafafa;
+    }
+    #rankBox {
+      margin-top:20px; padding:10px; background:#eef9ff;
+      border-radius:6px; display:none;
+    }
+    #testNameDisplay {
+      margin-bottom: 10px; font-size: 18px; font-weight: bold;
+      color:#333; padding:10px; background:#e3f2ff; border-radius:6px;
+    }
   </style>
 </head>
 
 <body>
   <div class="container">
+
     <h1>👩‍🏫 Teacher Panel</h1>
+
+    <div id="testNameDisplay"></div>
 
     <section>
       <h3>Send Question</h3>
@@ -35,47 +54,73 @@
     </section>
 
     <button id="generateRanks">Generate Ranks 🏆</button>
-    <div id="rankBox" style="display:none;"></div>
+    <div id="rankBox"></div>
 
     <br><br>
+
     <button id="exportPDF">Export PDF 📄</button>
+    <br><br>
+    <button id="finishTest" style="background:red;">Finish Test ❌</button>
 
   </div>
 
-  <!-- SOCKET + PDF LIBRARIES -->
+  <!-- LIBRARIES -->
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <script>
 (function(){
+
   const API_URL = "https://online-class-m8h6.onrender.com";
   const socket = io(API_URL);
 
   let currentQuestion = "";
-  let testName = "Untitled Test";
+  let testName = localStorage.getItem("ssvt_test_name") || "";
+
+  // Display saved test name
+  const testNameDisplay = document.getElementById("testNameDisplay");
+  if(testName){
+    testNameDisplay.innerText = "Test Name: " + testName;
+  }
 
   const questionInput = document.getElementById("questionInput");
   const timeLimitInput = document.getElementById("timeLimit");
   const answersContainer = document.getElementById("answersContainer");
   const rankBox = document.getElementById("rankBox");
 
-  /* ----------------------- SEND QUESTION ----------------------- */
+  /* --------------- ASK TEST NAME ONCE ---------------- */
+  function askTestNameIfNeeded(){
+    if(!testName){
+      let t = prompt("Enter Test Name:");
+      if(t && t.trim() !== ""){
+        testName = t.trim();
+        localStorage.setItem("ssvt_test_name", testName);
+        testNameDisplay.innerText = "Test Name: " + testName;
+      }
+    }
+  }
+
+  askTestNameIfNeeded();
+
+  /* ---------------- SEND QUESTION ---------------- */
   document.getElementById("sendBtn").addEventListener("click", async () => {
+
+    askTestNameIfNeeded();
+
     const question = questionInput.value.trim();
     const timeLimit = timeLimitInput.value.trim();
     if(!question || !timeLimit) return alert("Enter question & time limit");
 
-    const namePrompt = prompt("Enter Test Name:");
-    if(namePrompt) testName = namePrompt;
-
     const res = await fetch(`${API_URL}/teacher/add-question`, {
-      method:"POST", headers:{ "Content-Type":"application/json" },
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
       body:JSON.stringify({ question, timeLimit })
     });
-    const q = await res.json();
 
+    const q = await res.json();
     currentQuestion = q.question;
 
+    // Broadcast to students
     socket.emit("teacher-question", {
       question: q.question,
       timeLimit: q.timeLimit,
@@ -87,7 +132,8 @@
     document.getElementById("sendStatus").innerText = "✅ Sent!";
   });
 
-  /* ----------------------- RECEIVE STUDENT ANSWER ----------------------- */
+
+  /* --------------- RECEIVE STUDENT ANSWER ---------------- */
   socket.on("student-answer", ({ studentName, answer, questionId }) => {
     addAnswerCard(studentName, answer, questionId);
   });
@@ -124,7 +170,7 @@
     answersContainer.prepend(div);
   }
 
-  /* ----------------------- GENERATE RANKS ----------------------- */
+  /* ----------------- GENERATE RANKS ------------------ */
   document.getElementById("generateRanks").onclick = () => {
     const cards = [...document.querySelectorAll(".answer-card")];
     const combined = {};
@@ -145,40 +191,39 @@
       results.map((r,i)=>`${i+1}. ${r.name} - ${r.total}`).join("<br>");
   };
 
-  /* ----------------------- EXPORT PDF WITH LOGO + TITLE ----------------------- */
+  /* ---------------- EXPORT PDF ---------------- */
   document.getElementById("exportPDF").onclick = async () => {
+
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
-    /* ------------------- LOGO URL ------------------- */
-    const logoURL = "https://ik.imagekit.io/eycpqxm26/cropped_circle_image.png"; // REPLACE WITH YOUR LOGO
+    /* ------- LOGO ------- */
+    const logoURL = "https://ik.imagekit.io/eycpqxm26/cropped_circle_image.png";
 
-    // Convert image to Base64
-    const imgData = await fetch(logoURL).then(r => r.blob()).then(blob => {
-      return new Promise(resolve => {
+    const imgData = await fetch(logoURL).then(r=>r.blob()).then(blob=>{
+      return new Promise(resolve=>{
         const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
+        reader.onload = ()=> resolve(reader.result);
         reader.readAsDataURL(blob);
       });
     });
 
-    /* ------------------- HEADER ---------------------- */
-    doc.addImage(imgData, "PNG", 10, 10, 25, 25);  // Logo left side
+    doc.addImage(imgData, "PNG", 10, 10, 25, 25);
 
     doc.setFontSize(18);
     doc.text("SSVT Online Test Report", 40, 18);
 
-    doc.setFontSize(13);
+    doc.setFontSize(12);
     doc.text("Date: " + new Date().toLocaleDateString(), 150, 18);
 
     doc.setFontSize(14);
     doc.text("Test Name: " + testName, 40, 30);
 
-    doc.line(10, 40, 200, 40); // separator
+    doc.line(10, 40, 200, 40);
 
     let y = 50;
 
-    /* ------------------- GROUP ANSWERS ------------------- */
+    /* ------- GROUP ANSWERS ------- */
     const grouped = {};
 
     [...document.querySelectorAll(".answer-card")].forEach(card => {
@@ -190,28 +235,26 @@
       grouped[name].push({ question: currentQuestion, answer, marks });
     });
 
-    /* ------------------- PRINTING STUDENT REPORTS ------------------- */
+    /* ------- PRINT STUDENT REPORT ------- */
     Object.keys(grouped).forEach((name, index) => {
       const studentAnswers = grouped[name];
       const totalMarks = studentAnswers.reduce((a,b)=>a+b.marks,0);
 
       doc.setFontSize(15);
-      doc.text(`${index+1}) ${name}  | Total Marks: ${totalMarks}`, 10, y);
+      doc.text(`${index+1}) ${name} | Total: ${totalMarks}`, 10, y);
       y += 10;
 
       studentAnswers.forEach((qa, i) => {
-        // Question
+
         const qLines = doc.splitTextToSize(`Q${i+1}: ${qa.question}`, 180);
         doc.setFontSize(12);
         doc.text(qLines, 10, y);
         y += qLines.length * 7;
 
-        // Answer
         const aLines = doc.splitTextToSize(`Answer: ${qa.answer}`, 180);
         doc.text(aLines, 10, y);
         y += aLines.length * 7;
 
-        // Marks
         doc.text(`Marks: ${qa.marks}`, 10, y);
         y += 10;
 
@@ -227,6 +270,16 @@
     doc.save("SSVT_Report.pdf");
   };
 
+  /* ----------------- FINISH TEST ------------------ */
+  document.getElementById("finishTest").onclick = () => {
+    if(confirm("Are you sure you want to finish and clear test?")){
+      localStorage.removeItem("ssvt_test_name");
+      location.reload();
+    }
+  };
+
 })();
 </script>
 
+</body>
+</html>
