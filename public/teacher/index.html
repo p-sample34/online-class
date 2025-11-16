@@ -14,6 +14,7 @@
     #rankBox { margin-top:20px; padding:10px; background:#eef9ff; border-radius:6px; }
   </style>
 </head>
+
 <body>
   <div class="container">
     <h1>👩‍🏫 Teacher Panel</h1>
@@ -36,15 +37,16 @@
     <button id="generateRanks">Generate Ranks 🏆</button>
     <div id="rankBox" style="display:none;"></div>
 
-    <br>
+    <br><br>
     <button id="exportPDF">Export PDF 📄</button>
 
   </div>
 
+  <!-- SOCKET + PDF LIBRARIES -->
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-<script>
+  <script>
 (function(){
   const API_URL = "https://online-class-m8h6.onrender.com";
   const socket = io(API_URL);
@@ -56,6 +58,7 @@
   const answersContainer = document.getElementById("answersContainer");
   const rankBox = document.getElementById("rankBox");
 
+  /* ----------------------- SEND QUESTION ----------------------- */
   document.getElementById("sendBtn").addEventListener("click", async () => {
     const question = questionInput.value.trim();
     const timeLimit = timeLimitInput.value.trim();
@@ -80,6 +83,7 @@
     document.getElementById("sendStatus").innerText = "✅ Sent!";
   });
 
+  /* ----------------------- RECEIVE STUDENT ANSWERS ----------------------- */
   socket.on("student-answer", ({ studentName, answer, questionId }) => {
     addAnswerCard(studentName, answer, questionId);
   });
@@ -116,9 +120,7 @@
     answersContainer.prepend(div);
   }
 
-  /* ---------------------------------------------------------
-    ✅ 1. Generate Rank List with TOTAL marks of each student
-  ----------------------------------------------------------*/
+  /* ----------------------- GENERATE RANKS ----------------------- */
   document.getElementById("generateRanks").onclick = () => {
     const cards = [...document.querySelectorAll(".answer-card")];
 
@@ -141,10 +143,7 @@
       results.map((r,i)=>`${i+1}. ${r.name} - ${r.total}`).join("<br>");
   };
 
-
-  /* ---------------------------------------------------------
-    ✅ 2. Export PDF grouping answers by student name
-  ----------------------------------------------------------*/
+  /* ----------------------- EXPORT PDF (FULL FIXED) ----------------------- */
   document.getElementById("exportPDF").onclick = () => {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
@@ -153,16 +152,12 @@
       ? currentQuestion.substring(0,20).replace(/[^a-zA-Z0-9]/g,"_") + "_" + new Date().toLocaleDateString() + ".pdf"
       : "student_results.pdf";
 
-    doc.setFontSize(15);
+    doc.setFontSize(16);
     doc.text("Student Responses Report", 10, 15);
 
-    if(currentQuestion){
-      doc.text("Question: " + currentQuestion, 10, 25);
-    }
+    let y = 28;
 
-    let y = 40;
-
-    // Group answers by student
+    // Group answers by students
     const grouped = {};
 
     [...document.querySelectorAll(".answer-card")].forEach(card => {
@@ -171,32 +166,43 @@
       const marks = parseFloat(card.querySelector(".mark-input")?.value || 0);
 
       if(!grouped[name]) grouped[name] = [];
-      grouped[name].push({ answer, marks });
+      grouped[name].push({ question: currentQuestion, answer, marks });
     });
 
-    // Convert object to array for sorting
     const sortedNames = Object.keys(grouped);
 
-    sortedNames.forEach((name) => {
+    sortedNames.forEach((name, index) => {
       const studentAnswers = grouped[name];
       const totalMarks = studentAnswers.reduce((a,b)=>a+b.marks,0);
 
-      doc.setFontSize(13);
-      doc.text(`${name}  | Total Marks: ${totalMarks}`, 10, y);
+      doc.setFontSize(14);
+      doc.text(`${index+1}) ${name}  | Total Marks: ${totalMarks}`, 10, y);
       y += 10;
 
-      studentAnswers.forEach((ans, index) => {
-        doc.setFontSize(11);
-        doc.text(`• Q${index+1} Marks: ${ans.marks}`, 10, y);
-        y += 7;
-        doc.text(`Answer: ${ans.answer}`, 10, y);
+      studentAnswers.forEach((qa, i) => {
+        doc.setFontSize(12);
+
+        // Wrap Question
+        const qLines = doc.splitTextToSize(`Q${i+1}: ${qa.question}`, 180);
+        doc.text(qLines, 10, y);
+        y += qLines.length * 7;
+
+        // Wrap Answer
+        const aLines = doc.splitTextToSize(`Answer: ${qa.answer}`, 180);
+        doc.text(aLines, 10, y);
+        y += aLines.length * 7;
+
+        // Marks
+        doc.text(`Marks: ${qa.marks}`, 10, y);
         y += 10;
 
         if(y > 270){ doc.addPage(); y = 20; }
       });
 
-      doc.line(10, y, 200, y); // separator
-      y += 8;
+      doc.line(10, y, 200, y);
+      y += 10;
+
+      if(y > 270){ doc.addPage(); y = 20; }
     });
 
     doc.save(filename);
@@ -205,7 +211,5 @@
 })();
 </script>
 
-  </script>
 </body>
 </html>
-
