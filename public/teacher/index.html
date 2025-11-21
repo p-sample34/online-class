@@ -46,8 +46,9 @@
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
- <script>
+<script>
 (function(){
+
   const API_URL = "https://online-class-m8h6.onrender.com";
   const socket = io(API_URL);
 
@@ -142,29 +143,23 @@
       results.map((r,i)=>`${i+1}. ${r.name} - ${r.total}`).join("<br>");
   };
 
-  /* ----------------------- EMBEDDED BASE64 LOGO (NO CORS) ----------------------- */
-  const BASE64_LOGO =
-"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAMAAACahl6sAAAAA1BMVEX///+nxBvIAAAAJUlEQVR4nO3BMQEAAADCoPVPbQ0PoAAAAAAAAAAAAAAAAAAAAAAAALwGO7IAAaOjFkMAAAAASUVORK5CYII=";
-
   /* ----------------------- EXPORT PDF ----------------------- */
   document.getElementById("exportPDF").onclick = async () => {
+
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
-    /* ------------------- HEADER ---------------------- */
-    doc.addImage(BASE64_LOGO, "PNG", 10, 10, 25, 25);
-
+    /* ---------- FAST, NON-FREEZING HEADER ---------- */
     doc.setFontSize(18);
-    doc.text("SSVT Online Test Report", 40, 18);
+    doc.text("SSVT Online Test Report", 10, 15);
 
-    doc.setFontSize(13);
-    doc.text("Date: " + new Date().toLocaleDateString(), 150, 18);
+    doc.setFontSize(12);
+    doc.text("Date: " + new Date().toLocaleDateString(), 150, 15);
+    doc.line(10, 20, 200, 20);
 
-    doc.line(10, 40, 200, 40);
+    let y = 30;
 
-    let y = 50;
-
-    /* ------------------- GROUP ANSWERS ------------------- */
+    /* ---------- GROUP ANSWERS SAFELY ---------- */
     const grouped = {};
 
     [...document.querySelectorAll(".answer-card")].forEach(card => {
@@ -176,36 +171,44 @@
       grouped[name].push({ question: currentQuestion, answer, marks });
     });
 
-    /* ------------------- PRINT ---------------------- */
-    Object.keys(grouped).forEach((name, index) => {
+    /* ---------- PRINT WITHOUT FREEZING ---------- */
+    for(const name of Object.keys(grouped)){
+
       const studentAnswers = grouped[name];
       const totalMarks = studentAnswers.reduce((a,b)=>a+b.marks,0);
 
-      doc.setFontSize(15);
-      doc.text(`${index+1}) ${name}  | Total: ${totalMarks}`, 10, y);
-      y += 10;
+      doc.setFontSize(14);
+      doc.text(`${name}  | Total Marks: ${totalMarks}`, 10, y);
+      y += 8;
 
-      studentAnswers.forEach((qa, i) => {
-        const qLines = doc.splitTextToSize(`Q${i+1}: ${qa.question}`, 180);
+      for(const qa of studentAnswers){
+
+        const qLines = doc.splitTextToSize(`Q: ${qa.question}`, 180);
         doc.setFontSize(12);
         doc.text(qLines, 10, y);
-        y += qLines.length * 7;
+        y += qLines.length * 6;
 
         const aLines = doc.splitTextToSize(`Answer: ${qa.answer}`, 180);
         doc.text(aLines, 10, y);
-        y += aLines.length * 7;
+        y += aLines.length * 6;
 
         doc.text(`Marks: ${qa.marks}`, 10, y);
         y += 10;
 
-        if(y > 270){ doc.addPage(); y = 20; }
-      });
+        if(y > 270){
+          doc.addPage();
+          y = 20;
+        }
+      }
 
       doc.line(10, y, 200, y);
       y += 10;
 
-      if(y > 270){ doc.addPage(); y = 20; }
-    });
+      if(y > 270){
+        doc.addPage();
+        y = 20;
+      }
+    }
 
     doc.save("SSVT_Report.pdf");
   };
