@@ -142,25 +142,17 @@
       results.map((r,i)=>`${i+1}. ${r.name} - ${r.total}`).join("<br>");
   };
 
+  /* ----------------------- EMBEDDED BASE64 LOGO (NO CORS) ----------------------- */
+  const BASE64_LOGO =
+"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAMAAACahl6sAAAAA1BMVEX///+nxBvIAAAAJUlEQVR4nO3BMQEAAADCoPVPbQ0PoAAAAAAAAAAAAAAAAAAAAAAAALwGO7IAAaOjFkMAAAAASUVORK5CYII=";
+
   /* ----------------------- EXPORT PDF ----------------------- */
   document.getElementById("exportPDF").onclick = async () => {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
-    /* Logo URL */
-    const logoURL = "https://i.ibb.co/zV9rQ4h/sample-logo.png";
-
-    // Convert image → Base64
-    const imgData = await fetch(logoURL).then(r => r.blob()).then(blob => {
-      return new Promise(resolve => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.readAsDataURL(blob);
-      });
-    });
-
     /* ------------------- HEADER ---------------------- */
-    doc.addImage(imgData, "PNG", 10, 10, 25, 25);
+    doc.addImage(BASE64_LOGO, "PNG", 10, 10, 25, 25);
 
     doc.setFontSize(18);
     doc.text("SSVT Online Test Report", 40, 18);
@@ -184,28 +176,25 @@
       grouped[name].push({ question: currentQuestion, answer, marks });
     });
 
-    /* ------------------- PRINTING STUDENT REPORTS ------------------- */
+    /* ------------------- PRINT ---------------------- */
     Object.keys(grouped).forEach((name, index) => {
       const studentAnswers = grouped[name];
       const totalMarks = studentAnswers.reduce((a,b)=>a+b.marks,0);
 
       doc.setFontSize(15);
-      doc.text(`${index+1}) ${name}  | Total Marks: ${totalMarks}`, 10, y);
+      doc.text(`${index+1}) ${name}  | Total: ${totalMarks}`, 10, y);
       y += 10;
 
       studentAnswers.forEach((qa, i) => {
-        // Question
         const qLines = doc.splitTextToSize(`Q${i+1}: ${qa.question}`, 180);
         doc.setFontSize(12);
         doc.text(qLines, 10, y);
         y += qLines.length * 7;
 
-        // Answer
         const aLines = doc.splitTextToSize(`Answer: ${qa.answer}`, 180);
         doc.text(aLines, 10, y);
         y += aLines.length * 7;
 
-        // Marks
         doc.text(`Marks: ${qa.marks}`, 10, y);
         y += 10;
 
@@ -226,4 +215,3 @@
 
 </body>
 </html>
-
