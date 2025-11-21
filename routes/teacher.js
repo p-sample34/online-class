@@ -2,23 +2,39 @@ const express = require("express");
 const router = express.Router();
 const Question = require("../models/Question");
 const Answer = require("../models/Answer");
-const generatePDF = require("../utils/generatePDF");
 
+/* Add Question */
 router.post("/add-question", async (req, res) => {
-  const q = await Question.create(req.body);
-  res.json(q);
+  try {
+    const { question, timeLimit } = req.body;
+
+    const q = await Question.create({
+      question,
+      timeLimit,
+      createdAt: new Date()
+    });
+
+    res.json(q);
+  } catch (err) {
+    res.json({ error: true });
+  }
 });
 
+/* Mark Answer */
 router.post("/mark-answer", async (req, res) => {
-  const { studentName, questionId, marks } = req.body;
-  await Answer.findOneAndUpdate({ studentName, questionId }, { marks });
-  res.json({ success: true });
-});
+  try {
+    const { studentName, questionId, marks } = req.body;
 
-router.get("/generate-report", async (req, res) => {
-  const answers = await Answer.find();
-  const pdfPath = await generatePDF(answers);
-  res.download(pdfPath);
+    const ans = await Answer.findOneAndUpdate(
+      { studentName, questionId },
+      { marks },
+      { new: true }
+    );
+
+    res.json({ success: true, ans });
+  } catch (err) {
+    res.json({ success: false });
+  }
 });
 
 module.exports = router;
