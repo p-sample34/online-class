@@ -22,22 +22,33 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
   <script>
+    // Backend Render URL
     const API_URL = "https://online-class-m8h6.onrender.com";
-    const socket = io(API_URL);
+
+    // Connect to backend socket server
+    const socket = io(API_URL, {
+      transports: ["websocket", "polling"]
+    });
 
     const studentName = localStorage.getItem("studentName");
     document.getElementById("studentName").innerText = studentName || "Student";
 
-    socket.on("newQuestion", (data) => {
+    // FIXED: correct event name — server emits "new-question"
+    socket.on("new-question", (data) => {
       const { question, timeLimit } = data;
+
       document.getElementById("questionBox").innerText = question;
       document.getElementById("answerBox").style.display = "block";
 
       let timeLeft = parseInt(timeLimit);
+      document.getElementById("timer").innerText = `⏱️ Time left: ${timeLeft}s`;
+
       const timer = setInterval(() => {
-        document.getElementById("timer").innerText = `⏱️ Time left: ${timeLeft}s`;
         timeLeft--;
+        document.getElementById("timer").innerText = `⏱️ Time left: ${timeLeft}s`;
+
         if (timeLeft < 0) {
           clearInterval(timer);
           submitAnswer();
@@ -45,20 +56,29 @@
       }, 1000);
     });
 
+    // FIXED: Correct API route → /student/submit
     async function submitAnswer() {
       const answer = document.getElementById("answer").value.trim();
-      if (!answer) return alert("Please write your answer before submitting.");
 
-      const res = await fetch(`${API_URL}/student/answer`, {
+      if (!answer) {
+        alert("Please write your answer before submitting.");
+        return;
+      }
+
+      const res = await fetch(`${API_URL}/student/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ studentName, answer }),
       });
 
       const data = await res.json();
+
       if (data.success) {
-        socket.emit("answerSubmitted", { studentName, answer });
+        // FIXED: correct event name — server listens for "student-answer"
+        socket.emit("student-answer", { studentName, answer });
+
         alert("Answer submitted!");
+
         document.getElementById("answer").value = "";
         document.getElementById("answerBox").style.display = "none";
         document.getElementById("timer").innerText = "";
@@ -69,4 +89,3 @@
   </script>
 </body>
 </html>
-
